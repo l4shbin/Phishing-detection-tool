@@ -1,94 +1,86 @@
 import os
 import sys
 import time
+import argparse
+from src.scanner import check_url
+from src.database import save_log
 
-# --- [ COLOR CONFIGURATION ] ---
-G = "\033[1;32m" # Green (Success)
-R = "\033[1;31m" # Red (Danger)
-Y = "\033[1;33m" # Yellow (Warning)
-B = "\033[1;34m" # Blue (Info)
-C = "\033[1;36m" # Cyan (Process)
-W = "\033[0m"    # White (Reset)
+# Colors
+G = "\033[1;32m"  # Green
+R = "\033[1;31m"  # Red
+Y = "\033[1;33m"  # Yellow
+B = "\033[1;34m"  # Blue
+C = "\033[1;36m"  # Cyan
+W = "\033[0m"    # Reset
 
-# --- [ UI COMPONENTS ] ---
-def l4sh_header():
+def header():
     os.system('clear' if os.name == 'posix' else 'cls')
-    print(f"""{G}
-  _  _         _     _     _        
- | || |  ___  | |__ (_)   | |__   
- | || |_/ __| | '_ \| |   | '_ \  
- |__   _\__ \ | |_) | |   | | | | 
-    |_| |___/ |_.__/|_|   |_| |_| 
-                                    
- {W}Repository : {C}Phishing-detection-tool{W}
- Author     : {C}l4shbin{W}
- Status     : {G}Stable / Execution Ready{W}
+    print(f"""
+{G}
+
+██╗░░░░░░░██╗██╗░██████╗██╗░░██╗
+██║░░░░░░██╔╝██║██╔════╝██║░░██║
+██║░░░░░██╔╝░██║╚█████╗░███████║
+██║░░░░░███████║░╚═══██╗██╔══██║
+███████╗╚════██║██████╔╝██║░░██║
+╚══════╝░░░░░╚═╝╚═════╝░╚═╝░░╚═╝
+{W}Repo: {C}Phishing-detection-tool (Advanced Edition){W}
+Author: {C}l4shbin{W}
+Status: {G}Production Ready | HTTPS/HTTP/Batch Support{W}
     """)
 
-def analyze_logic(url):
-    print(f"{C}[*]{W} Initializing heuristic scan...")
-    time.sleep(1.2)
-    print(f"{C}[*]{W} Target: {url}\n")
-    
-    risk_score = 0
-    detections = []
-
-    # 1. Protocol Security Audit
-    if url.startswith("http://"):
-        risk_score += 2
-        detections.append("Insecure Protocol (HTTP detected)")
-    
-    # 2. Domain Masking Check
-    shorteners = ['bit.ly', 't.co', 'tinyurl', 'is.gd', 'cutt.ly', 's.id']
-    if any(s in url.lower() for s in shorteners):
-        risk_score += 2
-        detections.append("URL Masking detected (Shortener service)")
-
-    # 3. Redirect Character Analysis
-    if "@" in url:
-        risk_score += 3
-        detections.append("Bypass character '@' found (High Risk)")
-
-    # 4. Social Engineering Keyword Match
-    keywords = ['login', 'verify', 'account', 'secure', 'banking', 'update', 'claim', 'gift']
-    if any(k in url.lower() for k in keywords):
-        risk_score += 1
-        detections.append("Credential-harvesting keywords found")
-
-    # --- [ DISPLAY RESULTS ] ---
-    print(f"{W}┌" + "─"*40)
-    
-    if risk_score >= 4:
-        print(f"{W}│ {R}[STATUS] RESULT: HIGH RISK / PHISHING{W}")
-    elif 1 <= risk_score < 4:
-        print(f"{W}│ {Y}[STATUS] RESULT: SUSPICIOUS / CAUTION{W}")
+def print_result(url, verdict, reasons, score, conf):
+    print(f"{C}[*] {W}Target: {url}")
+    print(f"{W}┌" + "─" * 60)
+    color = R if "HIGH" in verdict else Y if "SUSPICIOUS" in verdict else G
+    print(f"{W}│ {color}[VERDICT] {verdict} (Score: {score}/10 | Confidence: {conf}){W}")
+    print(f"{W}├" + "─" * 60)
+    if reasons:
+        for reason in reasons:
+            print(f"{W}│ {R}› {reason}{W}")
     else:
-        print(f"{W}│ {G}[STATUS] RESULT: CLEAN / NO THREAT{W}")
-    
-    print(f"{W}├" + "─"*40)
-    
-    if not detections:
-        print(f"{W}│ {G}» No malicious patterns identified.{W}")
-    else:
-        for report in detections:
-            print(f"{W}│ {R}» {W}{report}")
-            
-    print(f"{W}└" + "─"*40 + "\n")
+        print(f"{W}│ {G}› No threats detected.{W}")
+    print(f"{W}└" + "─" * 60 + "\n")
 
-# --- [ MAIN EXECUTION ] ---
-def run():
-    l4sh_header()
+def batch_scan(file_path):
     try:
-        target_url = input(f"{G}l4shbin{W}@{G}terminal{W}:~# ")
-        if not target_url:
-            print(f"{R}[!] Error: Target URL cannot be empty.{W}")
-            return
-        
-        analyze_logic(target_url)
-        
-    except KeyboardInterrupt:
-        print(f"\n{R}[!] Execution halted by user.{W}")
-        sys.exit()
+        with open(file_path, 'r') as f:
+            urls = [line.strip() for line in f if line.strip()]
+        print(f"{C}[*] Batch scanning {len(urls)} URLs...\n")
+        for url in urls:
+            verdict, reasons, score, conf = check_url(url)
+            print_result(url, verdict, reasons, score, conf)
+            save_log(url, verdict, reasons, score, conf)
+            time.sleep(0.5)  # Rate limit
+    except FileNotFoundError:
+        print(f"{R}[!] File not found: {file_path}")
+
+def main():
+    header()
+    parser = argparse.ArgumentParser(description="Advanced Phishing Detector")
+    parser.add_argument("url", nargs="?", help="Single URL to scan")
+    parser.add_argument("-f", "--file", help="File with list of URLs")
+    args = parser.parse_args()
+
+    if args.file:
+        batch_scan(args.file)
+    elif args.url:
+        verdict, reasons, score, conf = check_url(args.url)
+        print_result(args.url, verdict, reasons, score, conf)
+        save_log(args.url, verdict, reasons, score, conf)
+    else:
+        print(f"{Y}[?] Usage: python3 main.py <url> or python3 main.py -f urls.txt{W}")
+        url = input(f"{G}Enter URL: {W}")
+        if url:
+            verdict, reasons, score, conf = check_url(url)
+            print_result(url, verdict, reasons, score, conf)
+            save_log(url, verdict, reasons, score, conf)
+
+    input("\nPress Enter to exit...")
 
 if __name__ == "__main__":
-    run()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print(f"\n{R}[!] Stopped by user.{W}")
+        sys.exit(0)
